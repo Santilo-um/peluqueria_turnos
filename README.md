@@ -6,4 +6,5 @@ PASOS:
 pip install Flask Flask-SQLAlchemy Flask-JWT-Extended
 pip freeze > requirements.txt
 
-4. 
+En el archivo instance/db.sqlite3 esta la base de datos SQLite3
+La mantuve fuera del repo con el instance/
