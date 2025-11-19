@@ -1,74 +1,57 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.models.models import db, Turno, User
+import sqlite3
 from datetime import datetime
 
-appointments_bp = Blueprint('appointments', __name__)
+DB_PATH = "instance/db.sqlite3"
 
-# Crear turno (solo cliente)
-@appointments_bp.route('/turnos', methods=['POST'])
-@jwt_required()
-def crear_turno():
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
+def handle_appointment_command(parts):
+    command = parts[0]
 
-    if user.role != 'cliente':
-        return jsonify({'msg': 'Solo clientes pueden crear turnos'}), 403
-
-    data = request.json
-    try:
-        fecha = datetime.fromisoformat(data['fecha'])
-    except ValueError:
-        return jsonify({'msg': 'Formato de fecha inválido'}), 400
-
-    nuevo_turno = Turno(
-        cliente_id=user.id,
-        fecha=fecha,
-        servicio=data['servicio']
-    )
-    db.session.add(nuevo_turno)
-    db.session.commit()
-    return jsonify({'msg': 'Turno creado', 'turno_id': nuevo_turno.id}), 201
-
-# Ver turnos (cliente ve los suyos, peluquero/admin ve todos)
-@appointments_bp.route('/turnos', methods=['GET'])
-@jwt_required()
-def ver_turnos():
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-
-    if user.role in ['admin', 'peluquero']:
-        turnos = Turno.query.all()
+    if command == "CREATE_TURNO":
+        return create_turno(parts)
+    elif command == "LIST_TURNOS":
+        return list_turnos(parts)
     else:
-        turnos = Turno.query.filter_by(cliente_id=user.id).all()
+        return "ERROR|Comando de turnos inválido"
 
-    return jsonify([
-        {
-            'id': t.id,
-            'fecha': t.fecha.isoformat(),
-            'servicio': t.servicio,
-            'estado': t.estado,
-            'cliente': t.cliente.username
-        } for t in turnos
-    ])
+def create_turno(parts):
+    try:
+        _, cliente_id, fecha_str, servicio = parts
+        fecha = datetime.strptime(fecha_str, "%Y-%m-%d %H:%M")
 
-# Modificar estado del turno (solo peluquero/admin)
-@appointments_bp.route('/turnos/<int:turno_id>', methods=['PUT'])
-@jwt_required()
-def modificar_turno(turno_id):
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO turno (cliente_id, fecha, servicio)
+            VALUES (?, ?, ?)
+        """, (cliente_id, fecha.isoformat(), servicio))
+        conn.commit()
+        conn.close()
 
-    if user.role not in ['admin', 'peluquero']:
-        return jsonify({'msg': 'No autorizado'}), 403
+        return "OK|Turno creado correctamente"
+    except Exception as e:
+        return f"ERROR|{str(e)}"
 
-    turno = Turno.query.get_or_404(turno_id)
-    data = request.json
-    nuevo_estado = data.get('estado')
+def list_turnos(parts):
+    try:
+        _, cliente_id = parts
 
-    if nuevo_estado not in ['pendiente', 'confirmado', 'cancelado']:
-        return jsonify({'msg': 'Estado inválido'}), 400
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, fecha, servicio, estado
+            FROM turno
+            WHERE cliente_id = ?
+            ORDER BY fecha ASC
+        """, (cliente_id,))
+        rows = cursor.fetchall()
+        conn.close()
 
-    turno.estado = nuevo_estado
-    db.session.commit()
-    return jsonify({'msg': 'Turno actualizado'})
+        if not rows:
+            return "OK|No hay turnos registrados"
+
+        response = "OK"
+        for row in rows:
+            response += f"|{row[0]}:{row[1]}:{row[2]}:{row[3]}"
+        return response
+    except Exception as e:
+        return f"ERROR|{str(e)}"
