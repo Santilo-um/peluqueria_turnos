@@ -1,30 +1,10 @@
+version: '3.8'
+
 services:
   web:
     build: .
-    volumes:
-      - .:/app
     ports:
       - "5000:5000"
-    environment:
-      - FLASK_APP=run.py
-      - FLASK_ENV=development
-      - PYTHONPATH=/app
-
-    depends_on:
-      - db
-    command: flask run --host=0.0.0.0
-
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: peluqueria
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./instance/db.sqlite3:/app/instance/db.sqlite3
-
-
-
-volumes:
-  pgdata:
+      - ./instance:/app/instance
+    restart: unless-stopped
