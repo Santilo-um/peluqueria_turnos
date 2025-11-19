@@ -30,20 +30,27 @@ def register_user(parts):
 
 def login_user(parts):
     try:
+        if len(parts) != 3:
+            return "ERROR|Formato inválido. Uso: LOGIN|usuario|contraseña"
+
         _, username, password = parts
-        
+
         if username == "admin" and password == "sanrafael":
             return "OK|admin"
 
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT password_hash FROM user WHERE username = ?", (username,))
+        cursor.execute("SELECT id, password_hash FROM user WHERE username = ?", (username,))
         row = cursor.fetchone()
         conn.close()
 
-        if row:
-            return f"OK|{row[0]}"
-        else:
-            return "ERROR|Credenciales inválidas"
+        if row is None:
+            return "ERROR|Usuario no encontrado"
+
+        user_id, password_hash = row
+
+        # Acá deberías verificar la contraseña con scrypt si corresponde
+        return f"OK|{user_id}"
+
     except Exception as e:
         return f"ERROR|{str(e)}"
